@@ -1,0 +1,188 @@
+/**
+ * This stylesheet has not been tested on browsers other
+ * than recent (in 2012) Firefox and Chromium version.
+ */
+
+
+.tribune-wrapper .tribune-highlighted {
+  background-color: #EEEEEE;
+}
+
+.tribune-wrapper .tribune-post .tribune-message span.tribune-post-clock.tribune-highlighted {
+  background-color: #EEEEEE;
+}
+
+.tribune-wrapper .tribune-posts ol {
+  list-style-type: none;
+  padding: 0;
+}
+
+.tribune-wrapper .tribune-answer .tribune-clock {
+  border-color: #CCC;
+}
+
+.tribune-wrapper .tribune-own-post .tribune-clock {
+  border-color: #666;
+}
+
+/* Anything smaller than 500px */
+@media only screen and (max-width: 500px) {
+  .tribune-wrapper .tribune-posts .tribune-post > span {
+    padding: 0;
+    margin: 0;
+  }
+
+  /* these are comfortable for me, maybe not for everybody
+   */
+  .tribune-wrapper .tribune-post {
+    font-size: 85%;
+  }
+
+  .tribune-wrapper .tribune-post .tribune-user {
+    font-size: 80%;
+  }
+
+  /* move it out of the way, but make it more visible too
+   * :hover won't work on most tablets, but this helps on
+   * narrow browser windows on regular screens too */
+  .tribune-wrapper .tribune-posts .tribune-post .tribune-date {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    border-width: 3px;
+    padding: 0 4px;
+             font-size: 110%;
+  }
+}
+
+.tribune-wrapper .tribune-clock {
+  border-left: 7px solid transparent;
+  border-radius: 7px 0 0 7px;
+  -webkit-border-radius: 7px 0 0 7px;
+  -moz-border-radius: 7px 0 0 7px;
+  -o-border-radius: 7px 0 0 7px;
+  padding-left: 3px;
+}
+
+.tribune-wrapper .tribune-post > span {
+  display: inline;
+  padding-right: 1ex;
+}
+
+.tribune-wrapper .tribune-post .tribune-message {
+  overflow: hidden;
+}
+
+.tribune-wrapper .tribune-post .tribune-post-clock {
+  cursor: pointer;
+  text-decoration: underline;
+  color: #5555CC;
+}
+
+.tribune-wrapper .tribune-post .tribune-post-user {
+  cursor: pointer;
+  text-decoration: none;
+  color: #5555CC;
+}
+
+.tribune-wrapper .tribune-post .tribune-clock {
+  cursor: pointer;
+  text-decoration: underline;
+  color: #5555CC;
+}
+
+.tribune-wrapper .tribune-post .tribune-date {
+  cursor: default;
+  position: absolute;
+  margin-left: -110px;
+  background: white;
+  font-style: italic;
+  border: 1px solid #CCC;
+  border-radius: 8px;
+  padding: 0 5px;
+
+  opacity: 0;
+  -webkit-transition: opacity 0.5s ease 0.1s;
+  -moz-transition: opacity 0.5s ease 0.1s;
+  -o-transition: opacity 0.5s ease 0.1s;
+  transition: opacity 0.5s ease 0.1s;
+}
+
+.tribune-wrapper .tribune-post:hover .tribune-date {
+  opacity: 1;
+}
+
+.tribune-wrapper .tribune-post[data-username=""] .tribune-user {
+  color: #993333;
+}
+
+.tribune-wrapper .tribune-post[data-username="Anonymous"] .tribune-user {
+  color: #993333;
+}
+
+.tribune-wrapper .tribune-post .tribune-user {
+  color: #339933;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tribune-wrapper .tribune-post .tribune-user:before {
+  content: '<';
+}
+
+.tribune-wrapper .tribune-post .tribune-user:after {
+  content: '>';
+}
+
+#tribune-delete-post {
+  color: red;
+  margin-right: 1ex;
+}
+
+#tribune-delete-post:hover {
+  text-decoration: none;
+}
+
+.tribune-post-preview {
+  position: fixed;
+  top: 0;
+  border: 2px solid black;
+  border-top: none;
+  background-color: white;
+  padding: 5px 10px;
+  -moz-border-radius: 0 0 10px 10px;
+  -webkit-border-radius: 0 0 10px 10px;
+  -o-border-radius: 0 0 10px 10px;
+  border-radius: 0 0 10px 10px;
+}
+
+.tribune-post-preview #tribune-delete-post {
+  display: none;
+}
+
+.tribune-form input.form-text {
+  -webkit-transition: background-color 0.5s ease 0.1s;
+  -moz-transition: background-color 0.5s ease 0.1s;
+  -o-transition: background-color 0.5s ease 0.1s;
+  transition: background-color 0.5s ease 0.1s;
+}
+
+.tribune-reload-error input.form-text {
+  background-color: #FF9988;
+}
+
+.tribune-post-error input.form-text {
+  background-color: #FF6655;
+}
+
+.tribune-form input {
+  float: left;
+}
+
+.tribune-form input[name=message] {
+  width: 100%;
+}
+
+.form-item-tribune-email {
+  display: none;
+}

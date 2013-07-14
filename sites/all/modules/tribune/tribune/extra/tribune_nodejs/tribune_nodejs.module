@@ -1,0 +1,30 @@
+<?php
+
+/**
+ * Implements hook_tribune_post().
+ */
+function tribune_nodejs_tribune_after_post($node, $post) {
+  $post_html = theme('tribune_post', array('post' => $post, 'node' => $node));
+
+  $message = (object) array(
+    'broadcast' => TRUE,
+    'data' => (object) array(
+      'post_html' => $post_html,
+      'post_id' => $post['post_id'],
+      'tribune' => $node->nid,
+    ),
+    'callback' => 'tribune_new_post',
+  );
+
+  nodejs_enqueue_message($message);
+}
+
+/**
+ * Implements hook_node_view_alter().
+ */
+function tribune_nodejs_node_view($node, $view_mode, $langcode) {
+  if ($node->type == 'tribune') {
+    drupal_add_js(drupal_get_path('module', 'tribune_nodejs') . '/tribune_nodejs.js', array('weight' => 10));
+  }
+}
+

@@ -1,0 +1,674 @@
+<?php
+
+/**
+ * @file
+ * The core module that manages all common tribune operations
+ */
+
+/**
+ * Implements hook_tribune_types().
+ */
+function tribune_local_tribune_types() {
+  return array(
+    'local' => array(
+      'title' => t('Local'),
+      'description' => t('A local tribune'),
+      'module' => 'tribune_local',
+    ),
+  );
+}
+
+/**
+ * Implements hook_node_prepare().
+ * We need to add our javascript in the tribune form just in case our
+ * type is used. There might be better ways but this will do for now.
+ */
+function tribune_directory_node_prepare($node) {
+  if ($node->type == 'tribune') {
+    drupal_add_js(drupal_get_path('module', 'tribune_local') . '/tribune_local.js');
+  }
+}
+
+/**
+ * Implements hook_tribune_form().
+ */
+function tribune_local_tribune_form($node, $form_state) {
+  if ((!empty($form_state['values']['tribune_type']) and $form_state['values']['tribune_type'] == 'local')
+      or (!empty($node->tribune_type) and $node->tribune_type == 'local')) {
+
+    $form = array(
+      'tribune_local_details' => array(
+        '#weight' => 2,
+        '#type' => 'fieldset',
+        '#title' => t('Tribune details'),
+
+        'tribune_max_length' => array(
+          '#type' => 'textfield',
+          '#title' => t('Maximum length'),
+          '#description' => t('Maximum allowed length for messages.'),
+          '#default_value' => isset($node->tribune_max_length) ? $node->tribune_max_length : 256,
+          '#required' => FALSE,
+        ),
+      ),
+    );
+
+    return $form;
+  } else {
+    return NULL;
+  }
+}
+
+/**
+ * Implements hook_load().
+ */
+function tribune_local_load($nodes) {
+  $result = db_query('SELECT * FROM {tribune_local} WHERE nid IN (:nids)', array(':nids' => array_keys($nodes)));
+  foreach ($result as $record) {
+    $nodes[$record->nid]->tribune_max_length = $record->max_length;
+    $nodes[$record->nid]->tribune_reload_rate = $record->reload_rate;
+  }
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function tribune_local_node_insert($node) {
+  if ($node->type == 'tribune' and $node->tribune_type == 'local') {
+    db_insert('tribune_local')
+      ->fields(array(
+        'nid' => $node->nid,
+        'max_length' => $node->tribune_max_length,
+        'reload_rate' => 30,
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_node_update().
+ */
+function tribune_local_node_update($node) {
+  if ($node->type == 'tribune' and $node->tribune_type == 'local') {
+    db_update('tribune_local')
+      ->fields(array(
+        'nid' => $node->nid,
+        'max_length' => $node->tribune_max_length,
+        'reload_rate' => $node->tribune_reload_rate,
+      ))
+      ->condition('nid', $node->nid)
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_node_delete().
+ */
+function tribune_local_node_delete($node) {
+  if ($node->type == 'tribune' and $node->tribune_type == 'local') {
+    db_delete('tribune_local')
+      ->condition('nid', $node->nid)
+      ->execute();
+  }
+}
+
+/**
+ * Implements hook_tribune_posts().
+ */
+function tribune_local_tribune_posts($node, $count, $last_id = 0, $include_moderated = TRUE) {
+  $posts = array();
+
+  $result = db_query_range('SELECT * FROM {tribune_local_post} WHERE nid IN (:nid) AND moderated = 0 AND post_id > :last_id ORDER BY pid DESC', 0, $count, array(':nid' => $node->nid, ':last_id' => $last_id));
+  foreach ($result as $record) {
+    $record->id = $record->post_id;
+    $posts[$record->post_id] = (array)$record;
+
+    if ($record->post_id < $last_id || !$last_id) {
+      $last_id = $record->post_id;
+    }
+  }
+
+  if ($include_moderated and $last_id) {
+    $result = db_query('SELECT * FROM {tribune_local_post} WHERE nid IN (:nid) AND moderated >= :last_id ORDER BY pid DESC', array(':nid' => $node->nid, ':last_id' => $last_id));
+    foreach ($result as $record) {
+      $posts[$record->post_id] = NULL;
+    }
+  }
+
+  return $posts;
+}
+
+/**
+ * Implements hook_tribune_info().
+ */
+function tribune_local_tribune_info($node) {
+  return array(
+    'moderated' => TRUE,
+    'max_length' => $node->tribune_max_length,
+  );
+}
+
+/**
+ * Implements hook_tribune_post().
+ */
+function tribune_local_tribune_post($node, $message, $user, $timestamp, $info) {
+  $message = tribune_local_sanitize($message, $node->tribune_max_length);
+  $message = tribune_local_replace_urls($message);
+  $transaction = db_transaction();
+  $post_id = db_select('tribune_local_post')
+    ->condition('tribune_local_post.nid', $node->nid)
+    ->fields('tribune_local_post', array('post_id'))
+    ->orderBy('tribune_local_post.post_id', 'DESC')
+    ->range(0, 1)
+    ->execute()
+    ->fetchField();
+
+  $post = array(
+    'nid' => $node->nid,
+    'uid' => $user->uid,
+    'post_id' => $post_id + 1,
+    'text' => $message,
+    'info' => substr($info, 0, 128),
+    'timestamp' => $timestamp,
+    'clock_index' => 0,
+  );
+  db_insert('tribune_local_post')
+    ->fields($post)
+    ->execute();
+
+  $post['id'] = $post_id + 1;
+
+  return array(
+    'post_id' => $post_id + 1,
+    'post' => $post,
+  );
+}
+
+/**
+ * Implements hook_tribune_delete().
+ */
+function tribune_local_tribune_delete($node) {
+  db_delete('tribune_local_post')
+    ->condition('nid', $node->nid)
+    ->execute();
+}
+
+/**
+ * Implements hook_tribune_delete_post()
+ */
+function tribune_local_tribune_delete_post($node, $post_id) {
+  $last_id = db_select('tribune_local_post')
+    ->fields('tribune_local_post', array('post_id'))
+    ->orderBy('post_id', 'DESC')
+    ->range(0, 1)
+    ->execute()
+    ->fetchField();
+
+  db_update('tribune_local_post')
+    ->fields(array(
+      'moderated' => $last_id,
+    ))
+    ->condition('post_id', $post_id)
+    ->execute();
+}
+
+/**
+ * Implements hook_tribune_reference().
+ */
+function tribune_local_tribune_reference($node, $timestamp, $from) {
+  if (strlen($timestamp) == 4) {
+    $timestamp .= '__';
+  }
+  $post = db_select('tribune_local_post')
+    ->condition('tribune_local_post.nid', $node->nid)
+    ->condition('tribune_local_post.post_id', $from, '<')
+    ->condition('tribune_local_post.timestamp', '%'.$timestamp, 'LIKE')
+    ->fields('tribune_local_post')
+    ->orderBy('tribune_local_post.post_id', 'DESC')
+    ->range(0, 1)
+    ->execute()
+    ->fetchAssoc();
+
+  $post['id'] = $post['post_id'];
+
+  return array($post);
+}
+
+/**
+ * Implements hook_menu().
+ */
+function tribune_local_menu() {
+  return array(
+    'admin/config/tribune' => array(
+      'title' => 'Tribune',
+      'page callback' => 'system_admin_menu_block_page',
+      'access arguments' => array('access administration pages'),
+      'file' => 'system.admin.inc',
+      'file path' => drupal_get_path('module', 'system'),
+      'position' => 'right',
+    ),
+    'admin/config/tribune/local-upgrade' => array(
+      'title' => 'Upgrade',
+      'description' => 'Upgrade from older versions of the tribune module.',
+      'page callback' => 'tribune_local_upgrade_page',
+      'file' => 'tribune_local.update.inc',
+      'access arguments' => array('access administration pages'),
+    ),
+    'node/%tribune_local_menu/history' => array(
+      'type' => MENU_LOCAL_TASK,
+      'title' => 'History',
+      'page callback' => 'tribune_local_history',
+      'page arguments' => array(1),
+      'access callback' => 'tribune_access',
+      'access arguments' => array('read tribune', 1),
+    ),
+    // The last wildcard isn't used in the path even though it
+    // is used (and absolutely needed). I seems to work fine this
+    // way, and it prevents a PHP notice, which is displayed when
+    // a wildcard is used in a MENU_LOCAL_TASK menu entry.
+    'node/%tribune_local_menu/history/date' => array(
+      'type' => MENU_LOCAL_TASK,
+      'title' => 'History by date',
+      'page callback' => 'tribune_local_history_by_date',
+      'page arguments' => array(1, 4),
+      'access callback' => 'tribune_access',
+      'access arguments' => array('read tribune', 1),
+    ),
+    'node/%tribune_local_menu/history/user' => array(
+      'type' => MENU_LOCAL_TASK,
+      'title' => 'History by user',
+      'page callback' => 'tribune_local_history_by_user',
+      'page arguments' => array(1, 4),
+      'access callback' => 'tribune_access',
+      'access arguments' => array('read tribune', 1),
+    ),
+    'node/%tribune_local_menu/history/user-autocomplete' => array(
+      'type' => MENU_CALLBACK,
+      'page callback' => 'tribune_local_user_autocomplete',
+      'page arguments' => array(1),
+      'access callback' => 'tribune_access',
+      'access arguments' => array('read tribune', 1),
+    ),
+    'node/%tribune_local_menu/history/search' => array(
+      'type' => MENU_LOCAL_TASK,
+      'title' => 'History by string',
+      'page callback' => 'tribune_local_history_by_string',
+      'page arguments' => array(1, 4),
+      'access callback' => 'tribune_access',
+      'access arguments' => array('read tribune', 1),
+    ),
+  );
+}
+
+/**
+ * Autocompletes usernames using users who have actually posted
+ * in a tribune.
+ */
+function tribune_local_user_autocomplete($node, $string) {
+  $records = db_select('tribune_local_post')
+    ->condition('tribune_local_post.nid', $node->nid)
+    ->groupBy('uid')
+    ->fields('tribune_local_post', array('uid'))
+    ->execute()
+    ->fetchAllAssoc('uid');
+
+  $uids = array_keys($records);
+  $users = user_load_multiple($uids);
+
+  $matches = array();
+  foreach ($users as $user) {
+    if (stripos($user->name, $string) === 0) {
+      $matches[$user->name] = $user->name;
+    }
+  }
+
+  drupal_json_output($matches);
+}
+
+/**
+ * Show all posts posted on some day.
+ */
+function tribune_local_history_by_date($node, $date) {
+  if (!$date or strlen($date) < 6) {
+    drupal_goto('node/' . $node->nid . '/history');
+  }
+
+  $query = db_select('tribune_local_post');
+  $query->condition('tribune_local_post.nid', $node->nid);
+  $query->addExpression('SUBSTRING(timestamp FROM 1 FOR 8)', 'day');
+  $query->fields('tribune_local_post');
+  $query->addField('tribune_local_post', 'post_id', 'id');
+  $query->havingCondition('day', $date);
+  $query->orderBy('tribune_local_post.post_id', 'ASC');
+
+  $count = $query->countQuery()->execute()->fetchField();
+  $page = pager_default_initialize($count, $node->tribune_display_posts);
+  $offset = $node->tribune_display_posts * $page;
+
+  $posts = $query->range($offset, $node->tribune_display_posts)->execute()->fetchAllAssoc('post_id');
+  $posts = array_reverse($posts, TRUE);
+
+  drupal_add_css(drupal_get_path('module', 'tribune') . '/tribune.css');
+  drupal_add_js(drupal_get_path('module', 'tribune') . '/tribune.js');
+  drupal_add_js(array(
+    'tribune' => array(
+      'tribune-'.$node->nid => array(
+        'referencesearchurl' => url('node/' . $node->nid . '/reference-search'),
+      ),
+    ),
+  ), 'setting');
+
+  $content = array('#theme' => 'tribune', '#posts' => $posts, '#node' => $node, '#read-only' => TRUE);
+  return drupal_render($content).theme('pager');
+}
+
+/**
+ * Show all posts posted by an user.
+ */
+function tribune_local_history_by_user($node, $username) {
+  if (!$username) {
+    drupal_goto('node/' . $node->nid . '/history');
+  }
+
+  $query = db_select('tribune_local_post');
+  $query->condition('tribune_local_post.nid', $node->nid);
+
+  if ($username == t('Anonymous')) {
+    $query->condition('tribune_local_post.uid', 0);
+  } else if ($user = user_load_by_name($username)) {
+    $or = db_or();
+    $or->condition('tribune_local_post.info', $username . '%', 'LIKE');
+    $or->condition('tribune_local_post.uid', $user->uid);
+    $query->condition($or);
+  } else {
+    $query->condition('tribune_local_post.info', $username . '%', 'LIKE');
+  }
+  $query->fields('tribune_local_post');
+  $query->addField('tribune_local_post', 'post_id', 'id');
+  $query->orderBy('tribune_local_post.post_id', 'ASC');
+
+  $count = $query->countQuery()->execute()->fetchField();
+  $page = pager_default_initialize($count, $node->tribune_display_posts);
+  $offset = $node->tribune_display_posts * $page;
+
+  $posts = $query->range($offset, $node->tribune_display_posts)->execute()->fetchAllAssoc('post_id');
+  $posts = array_reverse($posts, TRUE);
+
+  drupal_add_css(drupal_get_path('module', 'tribune') . '/tribune.css');
+  drupal_add_js(drupal_get_path('module', 'tribune') . '/tribune.js');
+  drupal_add_js(array(
+    'tribune' => array(
+      'tribune-'.$node->nid => array(
+        'referencesearchurl' => url('node/' . $node->nid . '/reference-search'),
+      ),
+    ),
+  ), 'setting');
+
+  $content = array('#theme' => 'tribune', '#posts' => $posts, '#node' => $node, '#read-only' => TRUE);
+  return drupal_render($content).theme('pager');
+}
+
+/**
+ * Show all posts containing a string.
+ */
+function tribune_local_history_by_string($node, $string) {
+  if (!$string) {
+    drupal_goto('node/' . $node->nid . '/history');
+  }
+
+  $query = db_select('tribune_local_post');
+  $query->condition('tribune_local_post.nid', $node->nid);
+  $query->condition('tribune_local_post.text', '%' . $string . '%', 'LIKE');
+  $query->fields('tribune_local_post');
+  $query->addField('tribune_local_post', 'post_id', 'id');
+  $query->orderBy('tribune_local_post.post_id', 'ASC');
+
+  $count = $query->countQuery()->execute()->fetchField();
+  $page = pager_default_initialize($count, $node->tribune_display_posts);
+  $offset = $node->tribune_display_posts * $page;
+
+  $posts = $query->range($offset, $node->tribune_display_posts)->execute()->fetchAllAssoc('post_id');
+  $posts = array_reverse($posts, TRUE);
+
+  drupal_add_css(drupal_get_path('module', 'tribune') . '/tribune.css');
+  drupal_add_js(drupal_get_path('module', 'tribune') . '/tribune.js');
+  drupal_add_js(array(
+    'tribune' => array(
+      'tribune-'.$node->nid => array(
+        'referencesearchurl' => url('node/' . $node->nid . '/reference-search'),
+      ),
+    ),
+  ), 'setting');
+
+  $content = array('#theme' => 'tribune', '#posts' => $posts, '#node' => $node, '#read-only' => TRUE);
+  return drupal_render($content).theme('pager');
+}
+
+/**
+ * Handles menu wildcards.
+ */
+function tribune_local_menu_load($nid) {
+  if ($node = tribune_menu_load($nid) and $node->tribune_type == 'local') {
+    return $node;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Displays a page allowing users to view the tribune history.
+ */
+function tribune_local_history($node) {
+  $form_date = drupal_get_form('tribune_local_history_form_date', $node);
+  $form_user = drupal_get_form('tribune_local_history_form_user', $node);
+  $form_string = drupal_get_form('tribune_local_history_form_string', $node);
+
+  return drupal_render($form_date).drupal_render($form_user).drupal_render($form_string);
+}
+
+/**
+ * Search posts by date.
+ */
+function tribune_local_history_form_date($form, $form_state, $node) {
+  $form = array();
+
+  $form['by-date'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Messages by date'),
+    '#description' => t('See all the messages posted at a specific date.'),
+  );
+  $form['by-date']['by-date-date'] = array(
+    '#type' => 'date',
+  );
+  $form['by-date']['by-date-submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('By date'),
+    '#submit' => array('tribune_local_history_by_date_handler'),
+  );
+  $form['node'] = array(
+    '#type' => 'value',
+    '#value' => $node,
+  );
+
+  return $form;
+}
+
+/**
+ * Search posts by author.
+ */
+function tribune_local_history_form_user($form, $form_state, $node) {
+  $form['by-user'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Messages by user'),
+    '#description' => t('See all the messages posted by an user.'),
+  );
+  $form['by-user']['by-user-user'] = array(
+    '#type' => 'textfield',
+    '#autocomplete_path' => 'node/' . $node->nid . '/history/user-autocomplete',
+  );
+  $form['by-user']['by-user-submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('User'),
+    '#submit' => array('tribune_local_history_by_user_handler'),
+  );
+  $form['node'] = array(
+    '#type' => 'value',
+    '#value' => $node,
+  );
+
+  return $form;
+}
+
+/**
+ * Search posts by string.
+ */
+function tribune_local_history_form_string($form, $form_state, $node) {
+  $form['by-string'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Search messages'),
+    '#description' => t('Search messages containing a string.'),
+  );
+  $form['by-string']['by-string-string'] = array(
+    '#type' => 'textfield',
+  );
+  $form['by-string']['by-string-submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Search'),
+    '#submit' => array('tribune_local_history_by_string_handler'),
+  );
+  $form['node'] = array(
+    '#type' => 'value',
+    '#value' => $node,
+  );
+
+  return $form;
+}
+
+function tribune_local_history_by_date_handler($form, $form_state) {
+  $node = $form_state['values']['node'];
+  $date = mktime(0, 0, 0, $form_state['values']['by-date-date']['month'], $form_state['values']['by-date-date']['day'], $form_state['values']['by-date-date']['year']);
+
+  header("Location: ". url('node/' . $node->nid . '/history/date/'. date("Ymd", $date)));
+  exit();
+}
+
+function tribune_local_history_by_user_handler($form, $form_state) {
+  $node = $form_state['values']['node'];
+
+  header("Location: ". url('node/' . $node->nid . '/history/user/' . $form_state['values']['by-user-user']));
+  exit();
+}
+
+function tribune_local_history_by_string_handler($form, $form_state) {
+  $node = $form_state['values']['node'];
+
+  header("Location: ". url('node/' . $node->nid . '/history/search/' . $form_state['values']['by-string-string']));
+  exit();
+}
+
+
+/**
+ * Replaces URLs with tags.
+ */
+function tribune_local_replace_urls($text) {
+  $text = preg_replace_callback('#'.
+      '('.                                        // 1
+        '(https?|ftp|gopher|file|mms|rtsp|rtmp)'. // 2
+        '://.*?'.
+      ')'.
+      '('.                                        // 3
+        '(,|\.|\)|\]|\})?'.                       // 4
+        '(<| | |"|$)'.                            // 5
+      ')'.
+      '#', 'tribune_local_url_replace_callback', $text);
+
+  return $text;
+}
+
+function tribune_local_url_replace_callback($matches) {
+  $url = $matches[1];
+  $text = 'url';
+
+  $pairs = array(
+    ')' => '(',
+    '}' => '{',
+    ']' => '[',
+  );
+
+  $before = "";
+  $after  = "";
+
+  if ($matches[4]) {
+    if (isset($pairs[$matches[4]]) && substr_count($url, $pairs[$matches[4]]) == substr_count($url, $matches[4]) + 1) {
+      $url .= $matches[4];
+    } else {
+      $after = $matches[4];
+    }
+  }
+
+  $after .= $matches[5];
+
+  return $before .'<a href="'. $url .'" target="_blank">['. $text .']</a>'. $after;
+}
+
+/**
+ * Sanitizes a post, leaving only safe HTML tags.
+ */
+function tribune_local_sanitize($text, $length = -1) {
+  $l    = strlen($text);
+  $byte = 0 ;
+
+  for ($i=0 ; $i < $l ; $i++) {
+    $byte = ord($text[$i]);
+    if ($byte < 32 or $byte == 127) {
+      $text[$i] = ' ';
+    }
+  }
+
+  $text = trim($text);
+
+  if (function_exists("mb_detect_encoding")) {
+    // let us assume that mb_substr exists too then
+    if (strcasecmp(mb_detect_encoding($text, 'UTF-8', TRUE), 'UTF-8') == 0) {
+      $clean = mb_substr($text, 0, $length, 'UTF-8');
+    }
+  } else if (function_exists("iconv_substr")) {
+    // there is no iconv_detect_encoding, so let us assume that the string is UTF-8-encoded
+    $clean = iconv_substr($text, 0, $length, 'UTF-8');
+  } else {
+    // better than nothing?
+    //$clean = substr(str_ctrl_clean($s), 0, $length);
+    // actually, we'll just pass it as it is, rather than risking splitting a character in two
+    $clean = $text;
+  }
+
+  $message = preg_replace_callback(':<(m|s|u|b|i|tt|code)>(.*?)</\1>:', 'tribune_local_replace_callback', $clean);
+
+  $replacement = array(
+        "&" =>   "&amp;",
+        "<" =>    "&lt;",
+        ">" =>    "&gt;",
+    chr(26) =>       "<",
+    chr(27) =>       ">",
+    chr(28) =>       "'",
+    chr(29) =>       '"',
+  );
+
+  return str_replace(array_keys($replacement), array_values($replacement), $message);
+}
+
+function tribune_local_replace_callback($matches) {
+  $text = preg_replace_callback(':<(m|s|u|b|i|tt)>(.*?)</\1>:', 'tribune_local_replace_callback', $matches[2]);
+  switch ($matches[1]) {
+    case 'm':
+      $start = "====> ". chr(26) ."b". chr(27) ."Moment ";
+      $stop  = chr(26) ."/b". chr(27) ." <====";
+      break;
+    case 'tt':
+      $matches[1] = 'code';
+    default:
+      $start = chr(26) . $matches[1] . chr(27);
+      $stop  = chr(26) ."/". $matches[1] . chr(27);
+  }
+  return $start . $text . $stop;
+}
+

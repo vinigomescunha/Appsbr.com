@@ -1,0 +1,16 @@
+/* AppsBr - Site - Tutoriais Freelancer */
+
+/* MAIN */
+  Developer: Vinicius Gomes
+  Twitter: @phpDeveloperBr
+  Contact: vinigomescunha [at] gmail.com
+  From: Rio de janeiro, Brazil
+
+/* SITE */
+  Last Update: 2013/01/08
+  Language: Portuguese
+  Doctype: HTML
+  IDE: NetBeans 7.1, GIMP, Filezilla
+  Components: jQuery, Drupal 7
+
+

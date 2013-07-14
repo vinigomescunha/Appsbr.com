@@ -1,0 +1,12 @@
+[08-Apr-2012 06:18:52] PHP Fatal error:  require_once() [<a href='function.require'>function.require</a>]: Failed opening required '/home/appsbrco/public_html/modules/system/system.install' (include_path='.:/usr/lib/php:/usr/local/lib/php') in /home/appsbrco/public_html/includes/install.core.inc on line 243
+[08-Apr-2012 06:19:03] PHP Fatal error:  require_once() [<a href='function.require'>function.require</a>]: Failed opening required '/home/appsbrco/public_html/modules/system/system.install' (include_path='.:/usr/lib/php:/usr/local/lib/php') in /home/appsbrco/public_html/includes/install.core.inc on line 243
+[08-Apr-2012 06:42:51] PHP Notice:  Undefined index:  database in /home/appsbrco/public_html/includes/database/mysql/database.inc on line 39
+[08-May-2012 23:25:58] PHP Fatal error:  Class 'PDO' not found in /home/appsbrco/public_html/includes/database/database.inc on line 184
+[08-May-2012 23:39:32] PHP Fatal error:  Class 'PDO' not found in /home/appsbrco/public_html/includes/database/database.inc on line 184
+[08-May-2012 23:39:33] PHP Fatal error:  Class 'PDO' not found in /home/appsbrco/public_html/includes/database/database.inc on line 184
+[08-May-2012 23:40:22] PHP Fatal error:  Class 'PDO' not found in /home/appsbrco/public_html/includes/database/database.inc on line 184
+[08-May-2012 23:40:24] PHP Fatal error:  Class 'PDO' not found in /home/appsbrco/public_html/includes/database/database.inc on line 184
+[08-May-2012 23:41:29] PHP Fatal error:  Class 'PDO' not found in /home/appsbrco/public_html/includes/database/database.inc on line 184
+[08-May-2012 23:41:30] PHP Fatal error:  Class 'PDO' not found in /home/appsbrco/public_html/includes/database/database.inc on line 184
+[08-May-2012 23:41:31] PHP Fatal error:  Class 'PDO' not found in /home/appsbrco/public_html/includes/database/database.inc on line 184
+[08-May-2012 23:41:35] PHP Fatal error:  Class 'PDO' not found in /home/appsbrco/public_html/includes/database/database.inc on line 184

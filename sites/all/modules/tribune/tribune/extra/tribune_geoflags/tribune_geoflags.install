@@ -1,0 +1,55 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the tribune_geoflags module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function tribune_geoflags_schema() {
+  return array(
+    'tribune_posts_geoflags' => array(
+      'description' => 'The table for storing which post comes from which country.',
+      'fields' => array(
+        'nid' => array(
+          'description' => 'The nid of the tribune node.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+        'post_id' => array(
+          'description' => 'The id of the post',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+        'country_code' => array(
+          'description' => 'Two-letter ISO 3166 alpha-2 country code',
+          'type' => 'varchar',
+          'length' => 2,
+          'not null' => TRUE,
+          'default' => 'XX',
+        ),
+      ),
+      'primary key' => array('nid', 'post_id'),
+      'foreign keys' => array('tribunes' => 'nid'),
+    ),
+  );
+}
+
+function tribune_geoflags_requirements($phase) {
+  $t = get_t();
+
+  return array(
+    'geoip' => array(
+      'title' => 'Geo IP',
+      'description' => 'The Tribune flags module needs the Geo IP PHP extension to be installed and configured on your server.',
+      'severity' => function_exists('geoip_country_code_by_name') ? REQUIREMENT_OK : REQUIREMENT_ERROR,
+    ),
+  );
+}
+

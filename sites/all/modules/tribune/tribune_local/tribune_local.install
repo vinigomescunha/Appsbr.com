@@ -1,0 +1,125 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the galerie module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function tribune_local_schema() {
+  return array(
+    'tribune_local' => array(
+      'description' => 'The table for local tribunes.',
+      'fields' => array(
+        'nid' => array(
+          'description' => 'The nid of the tribune node.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+        'max_length' => array(
+          'description' => 'Maximum length of posts.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+        'reload_rate' => array(
+          'description' => 'Seconds between page reloading.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+      ),
+      'primary key' => array('nid'),
+      'foreign keys' => array('tribunes' => 'nid'),
+    ),
+    'tribune_local_post' => array(
+      'description' => 'The table for tribune posts.',
+      'fields' => array(
+        'pid' => array(
+          'description' => 'The post id.',
+          'type' => 'serial',
+        ),
+        'nid' => array(
+          'description' => 'Tribune id.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+        'uid' => array(
+          'description' => 'Post author id.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+        'post_id' => array(
+          'description' => 'The public id of the post.',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+        'text' => array(
+          'description' => 'Post text.',
+          'type' => 'text',
+          'not null' => TRUE,
+        ),
+        'info' => array(
+          'description' => 'Poster user-agent.',
+          'type' => 'varchar',
+          'length' => 128,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+        'timestamp' => array(
+          'description' => 'Post timestamp',
+          'type' => 'varchar',
+          'length' => 14,
+          'not null' => TRUE,
+          'default' => '',
+        ),
+        'clock_index' => array(
+          'description' => 'Index of this post, for use when two posts were posted at the same second.',
+          'type' => 'varchar',
+          'length' => 2,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+        'moderated' => array(
+          'description' => 'Whether this post has been moderated down or not, holds the post_id of the latest post at the time of moderation (a bit of a hack, but allows to know when it was moderated).',
+          'type' => 'int',
+          'unsigned' => TRUE,
+          'not null' => TRUE,
+          'default' => 0,
+        ),
+      ),
+      'primary key' => array('pid'),
+      'foreign keys' => array(
+        'user' => 'uid',
+        'node' => 'nid',
+      ),
+    ),
+  );
+}
+
+/**
+ * Increase useragent size
+ */
+function tribune_local_update_7000() {
+  db_change_field('tribune_local_post', 'info', 'info',
+    array(
+      'description' => 'Poster user-agent.',
+      'type' => 'varchar',
+      'length' => 128,
+      'not null' => TRUE,
+      'default' => '',
+    )
+  );
+}
